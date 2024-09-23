@@ -22,38 +22,6 @@ public class DocumentWriterController {
     private DocumentWriterService documentService;
 
 
-    @PostMapping("/{parentId}/upload")
-    public ResponseEntity<Map<String,String>> uploadDocument(@PathVariable String parentId, @RequestParam("file") MultipartFile file) {
-
-        HashMap<String, String> response = new HashMap<>() ;
-        try {
-            UUID parentIdUUID = UUID.fromString(parentId);
-            Document document = documentService.uploadDocument(parentIdUUID, file);
-            response.put("message", "Document uploaded successfully: " + document);
-            return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (IOException e) {
-            response.put("message", "File upload failed: " + e.getMessage());
-
-            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-
-    @DeleteMapping("/document/{documentId}")
-    public ResponseEntity<Void> deleteDocument(@Valid @PathVariable UUID documentId) {
-        documentService.deleteDocument(documentId);
-        return ResponseEntity.noContent().build();
-
-    }
-
-    @PutMapping("/document/{documentId}")
-    public ResponseEntity<Document> updateDocument(@PathVariable UUID documentId, @RequestBody DocumentDto document) {
-        Document updatedDocument = documentService.updateDocument(document, documentId);
-        return ResponseEntity.ok(updatedDocument);
-    }
-
-
-
 
 
 

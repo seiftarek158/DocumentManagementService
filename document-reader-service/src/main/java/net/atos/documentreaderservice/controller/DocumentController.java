@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import net.atos.documentreaderservice.dto.DocumentDto;
 import net.atos.documentreaderservice.model.Document;
 import net.atos.documentreaderservice.service.DocumentService;
+import net.atos.documentreaderservice.service.DocumentWriterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +26,8 @@ public class DocumentController {
     @Autowired
     private DocumentService documentService;
 
+    @Autowired
+    private DocumentWriterService documentWriterService;
 
 
 
@@ -45,6 +48,35 @@ public class DocumentController {
     }
 
 
+    @PostMapping("/{parentId}/upload")
+    public ResponseEntity<Map<String,String>> uploadDocument(@PathVariable String parentId, @RequestParam("file") MultipartFile file) {
+
+        HashMap<String, String> response = new HashMap<>() ;
+        try {
+            UUID parentIdUUID = UUID.fromString(parentId);
+            Document document = documentWriterService.uploadDocument(parentIdUUID, file);
+            response.put("message", "Document uploaded successfully: " + document);
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        } catch (IOException e) {
+            response.put("message", "File upload failed: " + e.getMessage());
+
+            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
+    @DeleteMapping("/document/{documentId}")
+    public ResponseEntity<Void> deleteDocument(@Valid @PathVariable UUID documentId) {
+        documentWriterService.deleteDocument(documentId);
+        return ResponseEntity.noContent().build();
+
+    }
+
+    @PutMapping("/document/{documentId}")
+    public ResponseEntity<Document> updateDocument(@PathVariable UUID documentId, @RequestBody DocumentDto document) {
+        Document updatedDocument = documentWriterService.updateDocument(document, documentId);
+        return ResponseEntity.ok(updatedDocument);
+    }
 
 
 
@@ -53,5 +85,11 @@ public class DocumentController {
 
 
 
-    
+
+
+
+
+
+
+
 }
