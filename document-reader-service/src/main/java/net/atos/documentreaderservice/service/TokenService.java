@@ -22,10 +22,8 @@ public class TokenService {
 
     public String extractNationalid(String token) {
         String url = "http://127.0.0.1:8081/nationalId";
-        System.out.println("Hamadaaa's token:  "+token );
 
         ResponseEntity<String> response = restTemplate.postForEntity(url, token, String.class);
-        System.out.println(response.getBody());
 
         return response.getBody();
     }

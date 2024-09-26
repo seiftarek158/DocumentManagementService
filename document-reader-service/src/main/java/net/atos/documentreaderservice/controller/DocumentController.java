@@ -1,10 +1,9 @@
 package net.atos.documentreaderservice.controller;
 
 import jakarta.validation.Valid;
-import net.atos.documentreaderservice.dto.DocumentDto;
-import net.atos.documentreaderservice.model.Document;
+import net.atos.documentreaderservice.dto.DocumentDTO;
+import net.atos.documentreaderservice.service.DocumentQueryService;
 import net.atos.documentreaderservice.service.DocumentService;
-import net.atos.documentreaderservice.service.DocumentWriterService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -15,26 +14,24 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping
 public class DocumentController {
     @Autowired
-    private DocumentService documentService;
+    private DocumentQueryService documentQueryService;
 
     @Autowired
-    private DocumentWriterService documentWriterService;
+    private DocumentService documentService;
 
 
 
-    @GetMapping("/document/{documentId}")
+    @GetMapping("/documents/{documentId}")
     public ResponseEntity<Resource> downloadDocument(@PathVariable UUID documentId) {
-        Resource file = documentService.downloadDocument(documentId);
-        String contentType = documentService.getContentType(file);
+        Resource file = documentQueryService.downloadDocument(documentId);
+        String contentType = documentQueryService.getContentType(file);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getFilename() + "\"")
@@ -42,39 +39,38 @@ public class DocumentController {
     }
 
 
-    @GetMapping("/{workspaceId}/documents")
-    public ResponseEntity<List<Document>> searchDocuments(@PathVariable UUID workspaceId, @RequestParam String searchTerm) {
-        return ResponseEntity.ok(documentService.searchDocuments(workspaceId, searchTerm));
+    @GetMapping("/searchDocuments")
+    public ResponseEntity<List<DocumentDTO>> searchDocuments(@RequestParam String searchTerm, @RequestParam UUID workspaceId) {
+        return ResponseEntity.ok(documentQueryService.searchDocuments(workspaceId, searchTerm));
     }
 
 
-    @PostMapping("/{parentId}/upload")
-    public ResponseEntity<Map<String,String>> uploadDocument(@PathVariable String parentId, @RequestParam("file") MultipartFile file) {
+    @PostMapping("/{directoryId}/upload")
+    public ResponseEntity<DocumentDTO> uploadDocument(@PathVariable String directoryId, @RequestParam("file") MultipartFile file) {
 
-        HashMap<String, String> response = new HashMap<>() ;
         try {
-            UUID parentIdUUID = UUID.fromString(parentId);
-            Document document = documentWriterService.uploadDocument(parentIdUUID, file);
-            response.put("message", "Document uploaded successfully: " + document);
-            return new ResponseEntity<>(response, HttpStatus.OK);
-        } catch (IOException e) {
-            response.put("message", "File upload failed: " + e.getMessage());
+            UUID parentIdUUID = UUID.fromString(directoryId);
+            DocumentDTO documentDTO = documentService.uploadDocument(parentIdUUID, file);
 
-            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+            return ResponseEntity.ok(documentDTO);
+        } catch (IOException e) {
+
+
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
 
-    @DeleteMapping("/document/{documentId}")
+    @DeleteMapping("/documents/{documentId}")
     public ResponseEntity<Void> deleteDocument(@Valid @PathVariable UUID documentId) {
-        documentWriterService.deleteDocument(documentId);
+        documentService.deleteDocument(documentId);
         return ResponseEntity.noContent().build();
 
     }
 
-    @PutMapping("/document/{documentId}")
-    public ResponseEntity<Document> updateDocument(@PathVariable UUID documentId, @RequestBody DocumentDto document) {
-        Document updatedDocument = documentWriterService.updateDocument(document, documentId);
+    @PutMapping("/documents/{documentId}")
+    public ResponseEntity<DocumentDTO> updateDocument(@PathVariable UUID documentId, @RequestBody DocumentDTO document) {
+        DocumentDTO updatedDocument = documentService.updateDocument(document, documentId);
         return ResponseEntity.ok(updatedDocument);
     }
 

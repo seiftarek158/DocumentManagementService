@@ -1,6 +1,6 @@
 package net.atos.documentreaderservice.service;
 
-import net.atos.documentreaderservice.dto.DirectoryDto;
+import net.atos.documentreaderservice.dto.DirectoryDTO;
 import net.atos.documentreaderservice.exception.DuplicateEntryException;
 import net.atos.documentreaderservice.mappers.toDirectoryDto;
 import net.atos.documentreaderservice.model.Directory;
@@ -16,7 +16,7 @@ import java.util.UUID;
 
 
 @Service
-public class DirectoryWriterService {
+public class DirectoryService {
     @Autowired
     private DirectoryRepository directoryRepository;
     
@@ -35,16 +35,54 @@ public class DirectoryWriterService {
 
 
 
-    public Directory createDirectory(DirectoryDto directorydto, String token){
+    public DirectoryDTO createDirectory(DirectoryDTO directorydto, String token){
 
         String nationalId = tokenService.extractNationalid(token);
 
+        //validate directory
+        validateDirectory(directorydto,nationalId);
+
+
+       setWorkspaceIdIfNeeded(directorydto);
+
+        //Set national id and create directory
+        directorydto.setNationalid(nationalId);
+        Directory directory = toDirectoryDto.toEntity(directorydto);
+
+        //set path
+       String path =determineDirectoryPath(directorydto,directory);
+
+        directory.setPath(path);
+        createPhysicalDirectory(path);
+        directoryRepository.save(directory);
+        DirectoryDTO directoryDTO= toDirectoryDto.toDto(directory);
+
+        return directoryDTO;
+    }
+
+
+    private void setWorkspaceIdIfNeeded(DirectoryDTO directorydto) {
+        if (directorydto.getParentId() != null && directorydto.getWorkspaceId() == null) {
+            Directory parentDirectory = directoryRepository.findByIdAndIsDeletedFalse(directorydto.getParentId());
+            directorydto.setWorkspaceId(parentDirectory.getId());
+        }
+    }
+
+    private String determineDirectoryPath(DirectoryDTO directorydto, Directory directory) {
+        if (directorydto.getParentId() != null) {
+            Directory parentDirectory = directoryRepository.findByIdAndIsDeletedFalse(directorydto.getParentId());
+            return parentDirectory.getPath() + "/" + directory.getId();
+        } else {
+            return baseDirectory + "/" + directory.getId();
+        }
+    }
+
+    private void validateDirectory(DirectoryDTO directorydto, String nationalId) {
         //check if directory already exists and if valid parent directory
         if(directorydto.getParentId()==null){
             if(directoryRepository.findByNationalidAndNameAndIsDeletedFalse(nationalId,directorydto.getName()) !=null){
                 throw new DuplicateEntryException("Directory already exists");
             }
-
         }
         else{
 
@@ -55,42 +93,9 @@ public class DirectoryWriterService {
                 throw new DuplicateEntryException("Directory already exists");
             }
         }
-
-        //case when the directory is a workspace parentId is null and workspaceId is its own id
-        //case when the directory is directly a subworkspace parentId  is parent workspace id and workspaceId is own id
-        //case when the directory is a subdirectory parentId is parent directory id and workspaceId is parent workspace id
-
-        //case when the directory has a not null parentID but null workspaceId
-        System.out.println("directory parentId: "+ directorydto.getParentId());
-        System.out.println("directory workspaceId: "+ directorydto.getWorkspaceId());
-
-        if(directorydto.getParentId()!=null && directorydto.getWorkspaceId()==null){
-            Directory parentDirectory = directoryRepository.findByIdAndIsDeletedFalse(directorydto.getParentId());
-            System.out.println("parent directorys Id: "+ parentDirectory.getId() );
-            directorydto.setWorkspaceId(parentDirectory.getId());
-        }
-
-        //Set national id and create directory
-        directorydto.setNationalid(nationalId);
-        Directory directory = toDirectoryDto.toEntity(directorydto);
-
-        //set path
-        String path;
-        if(directorydto.getParentId()!=null){
-            Directory ParentDirectory = directoryRepository.findByIdAndIsDeletedFalse(directorydto.getParentId());
-            path = ParentDirectory.getPath()+ "/" + directory.getId();
-            directory.setPath(path);
-        }
-        else{
-            path = baseDirectory + "/"+ directory.getId();
-        }
-
-        directory.setPath(path);
-        createDirectoryDirectory(path);
-        return directoryRepository.save(directory);
     }
 
-    private void createDirectoryDirectory(String path) {
+    private void createPhysicalDirectory(String path) {
         try {
             Files.createDirectory(Path.of(path));
         } catch (Exception e) {
@@ -98,11 +103,12 @@ public class DirectoryWriterService {
         }
     }
 
-    public Directory updateDirectory(DirectoryDto newdirectorydto, UUID id){
+    public DirectoryDTO updateDirectory(DirectoryDTO newdirectorydto, UUID id){
         Directory directory = directoryRepository.findByIdAndIsDeletedFalse(id);
         if(directory ==null){
             throw new RuntimeException("Directory not found");
         }
+
         if(newdirectorydto.getName()!=null){
          directory.setName(newdirectorydto.getName());
          updateDirectoryPath(directory,newdirectorydto.getName());
@@ -110,9 +116,10 @@ public class DirectoryWriterService {
         if(newdirectorydto.getDescription()!=null){
             directory.setDescription(newdirectorydto.getDescription());
         }
-
-        return directoryRepository.save(directory);
+        directoryRepository.save(directory);
+        return toDirectoryDto.toDto(directory);
     }
+
 
     private void updateDirectoryPath(Directory directory, String newName) {
         String oldPath = directory.getPath();

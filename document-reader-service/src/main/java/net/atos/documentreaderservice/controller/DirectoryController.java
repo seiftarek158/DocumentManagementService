@@ -2,11 +2,11 @@ package net.atos.documentreaderservice.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import net.atos.documentreaderservice.dto.DirectoryDto;
-import net.atos.documentreaderservice.model.Directory;
-import net.atos.documentreaderservice.model.Document;
-import net.atos.documentreaderservice.service.DirectoryReaderService;
-import net.atos.documentreaderservice.service.DirectoryWriterService;
+import net.atos.documentreaderservice.dto.DirectoryDTO;
+import net.atos.documentreaderservice.dto.DocumentDTO;
+import net.atos.documentreaderservice.dto.LoadDirectoryDTO;
+import net.atos.documentreaderservice.service.DirectoryQueryService;
+import net.atos.documentreaderservice.service.DirectoryService;
 import net.atos.documentreaderservice.service.TokenService;
 import net.atos.documentreaderservice.validation.createValidation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,67 +18,77 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/directory")
+@RequestMapping("/directories")
 
 public class DirectoryController {
 
     @Autowired
-    private DirectoryReaderService directoryReaderService;
+    private DirectoryQueryService directoryQueryService;
 
     @Autowired
     private TokenService tokenService;
 
     @Autowired
-    private DirectoryWriterService directoryWriterService;
+    private DirectoryService directoryService;
 
 
 
-    @GetMapping("/user")
-    public ResponseEntity<List<Directory>> getDirectorysByNid(HttpServletRequest request) {
+    @GetMapping()
+    public ResponseEntity<List<DirectoryDTO>> getDirectorysByNid(HttpServletRequest request) {
         String token = request.getHeader("Authorization");
         token = token.substring(7);
         tokenService.validateToken(token);
-        return ResponseEntity.ok(directoryReaderService.getDirectorysByNid(token));
+        String nationalId = tokenService.extractNationalid(token);
+        return ResponseEntity.ok(directoryQueryService.getDirectorysByNid(nationalId));
     }
 
-    @GetMapping("/nested/{id}")
-    public ResponseEntity<List<Directory>> getNestedDirectories(@PathVariable UUID id) {
+    @GetMapping("/{directoryId}/nested")
+    public ResponseEntity<List<DirectoryDTO>> getNestedDirectories(@PathVariable UUID directoryId) {
 
-        return ResponseEntity.ok(directoryReaderService.getNestedDirectories(id));
+        return ResponseEntity.ok(directoryQueryService.getNestedDirectories(directoryId));
     }
 
-    @GetMapping("/documents/{id}")
-    public ResponseEntity<List<Document>> getDocumentsByParentId(@PathVariable UUID id) {
-        return ResponseEntity.ok(directoryReaderService.getAllDocumentsInDirectory(id));
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<Directory> getDirectoryById(@PathVariable UUID id) {
-        return ResponseEntity.ok(directoryReaderService.getDirectoryById(id));
+    @GetMapping("/{parentId}/documents")
+    public ResponseEntity<List<DocumentDTO>> getDocumentsByParentId(@PathVariable UUID parentId) {
+        return ResponseEntity.ok(directoryQueryService.getAllDocumentsInDirectory(parentId));
     }
 
 
-    @PostMapping("/new")
-    public ResponseEntity<Directory> createDirectory(@RequestBody @Validated(createValidation.class) DirectoryDto workspace, HttpServletRequest request) {
+
+
+    @PostMapping()
+    public ResponseEntity<DirectoryDTO> createDirectory(@RequestBody @Validated(createValidation.class) DirectoryDTO workspace, HttpServletRequest request) {
         String token = request.getHeader("Authorization");
         token = token.substring(7);
         if(!tokenService.validateToken(token)){
             throw new RuntimeException("Invalid token");
         }
-        return ResponseEntity.ok(directoryWriterService.createDirectory(workspace,token));
+
+        return ResponseEntity.ok(directoryService.createDirectory(workspace,token));
     }
 
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteDirectory(@Valid @PathVariable  UUID id) {
-        directoryWriterService.deleteDirectory(id);
+    @DeleteMapping("/{directoryId}")
+    public ResponseEntity<Void> deleteDirectory(@Valid @PathVariable  UUID directoryId) {
+        directoryService.deleteDirectory(directoryId);
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Directory> updateDirectory(@PathVariable UUID id, @RequestBody DirectoryDto directory) {
-        Directory updatedDirectory = directoryWriterService.updateDirectory(directory, id);
+    @PutMapping("/{directoryId}")
+    public ResponseEntity<DirectoryDTO> updateDirectory(@PathVariable UUID directoryId, @RequestBody DirectoryDTO directory) {
+        DirectoryDTO updatedDirectory = directoryService.updateDirectory(directory, directoryId);
         return ResponseEntity.ok(updatedDirectory);
+    }
+
+
+
+    @GetMapping("/{directoryId}")
+    public ResponseEntity<LoadDirectoryDTO> getDirectoryById(@PathVariable UUID directoryId) {
+        LoadDirectoryDTO loadDirectoryDTO = new LoadDirectoryDTO();
+        loadDirectoryDTO.setParentDirectory(directoryQueryService.getDirectoryById(directoryId));
+        loadDirectoryDTO.setNested_directories(directoryQueryService.getNestedDirectories(directoryId));
+        loadDirectoryDTO.setNested_documents(directoryQueryService.getAllDocumentsInDirectory(directoryId));
+        return ResponseEntity.ok(loadDirectoryDTO);
     }
 
 
